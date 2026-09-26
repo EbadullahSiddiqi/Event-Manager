@@ -4,6 +4,10 @@ import { UserNav } from "@/components/dashboard/user-nav";
 import { Search } from "@/components/dashboard/search";
 import { ModeToggle } from "@/components/mode-toggle";
 
+// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
+// Remove this opt-out after verifying the segment passes validation without it.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+
 export const metadata: Metadata = {
   title: "Dashboard | EventFlow",
   description: "Dashboard for event planners",

@@ -6,6 +6,10 @@ import { UpcomingTasks } from "@/components/dashboard/upcoming-tasks";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 
+// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
+// Remove this opt-out after verifying the segment passes validation without it.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+
 export const metadata: Metadata = {
   title: "Dashboard | EventFlow",
   description: "Manage your events and tasks",
@@ -18,10 +22,10 @@ export default function DashboardPage() {
         heading="Dashboard"
         text="Welcome back! Here's an overview of your events and tasks."
       />
-      
+
       <div className="space-y-8">
         <StatsCards />
-        
+
         <div className="grid gap-8 grid-cols-1 md:grid-cols-6 lg:grid-cols-12">
           <div className="col-span-1 md:col-span-6 lg:col-span-8">
             <EventList />
