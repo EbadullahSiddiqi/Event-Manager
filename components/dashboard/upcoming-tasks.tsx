@@ -1,151 +1,147 @@
-"use client"
+"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckCircle2, Clock, CalendarDays, AlertCircle } from "lucide-react";
-
-// Mock data
-const tasks = [
-  {
-    id: "task1",
-    title: "Confirm final guest count with Johnson wedding",
-    completed: false,
-    dueDate: "2025-04-10",
-    event: "Johnson Wedding",
-    priority: "high",
-  },
-  {
-    id: "task2",
-    title: "Send vendor payment reminders",
-    completed: false,
-    dueDate: "2025-04-05",
-    event: "TechCorp Annual Conference",
-    priority: "medium",
-  },
-  {
-    id: "task3",
-    title: "Review seating chart draft",
-    completed: false,
-    dueDate: "2025-04-02",
-    event: "Smith 50th Birthday",
-    priority: "medium",
-  },
-  {
-    id: "task4",
-    title: "Book transportation for speakers",
-    completed: false,
-    dueDate: "2025-04-01",
-    event: "TechCorp Annual Conference",
-    priority: "high",
-  },
-  {
-    id: "task5",
-    title: "Order birthday cake",
-    completed: true,
-    dueDate: "2025-03-30",
-    event: "Smith 50th Birthday",
-    priority: "medium",
-  },
-];
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, Clock, CalendarDays } from "lucide-react";
+import { TaskItem, EventItem } from "@/lib/db/store";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CreateTaskDialog } from "./create-task-dialog";
 
 export function UpcomingTasks() {
-  const [userTasks, setUserTasks] = useState(tasks);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [tRes, eRes] = await Promise.all([
+        fetch("/api/tasks").then((r) => r.json()),
+        fetch("/api/events").then((r) => r.json()),
+      ]);
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "text-destructive";
-      case "medium":
-        return "text-amber-500";
-      case "low":
-        return "text-green-500";
-      default:
-        return "text-muted-foreground";
+      if (tRes.success) setTasks(tRes.data || []);
+      if (eRes.success) setEvents(eRes.data || []);
+    } catch (err) {
+      console.error("Failed to load upcoming tasks:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return <AlertCircle className={`h-3 w-3 ${getPriorityColor(priority)}`} />;
-      case "medium":
-        return <Clock className={`h-3 w-3 ${getPriorityColor(priority)}`} />;
-      case "low":
-        return <CheckCircle2 className={`h-3 w-3 ${getPriorityColor(priority)}`} />;
-      default:
-        return <Clock className="h-3 w-3 text-muted-foreground" />;
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleToggleTask = async (task: TaskItem) => {
+    const newStatus = task.status === "completed" ? "todo" : "completed";
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: task.id, status: newStatus }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast({
+          title: newStatus === "completed" ? "Task Completed" : "Task Reopened",
+          description: `"${task.title}" updated.`,
+        });
+        setTasks((prev) =>
+          prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t))
+        );
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to update task status.",
+        variant: "destructive",
+      });
     }
   };
 
-  const toggleTaskCompletion = (taskId: string) => {
-    setUserTasks(
-      userTasks.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task
-      )
-    );
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">High</Badge>;
+      case "medium":
+        return <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-600 border-amber-500/20">Med</Badge>;
+      default:
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0">Low</Badge>;
+    }
   };
+
+  const upcomingList = tasks.filter((t) => t.status !== "completed").slice(0, 5);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Upcoming Tasks</CardTitle>
-        <CardDescription>Tasks that require your attention soon.</CardDescription>
+    <Card className="shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <div>
+          <CardTitle className="text-lg">Upcoming Tasks</CardTitle>
+          <CardDescription>To-dos requiring immediate attention.</CardDescription>
+        </div>
+        <CreateTaskDialog eventsList={events} onSuccess={loadData} />
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {userTasks.slice(0, 5).map((task) => (
-            <div
-              key={task.id}
-              className={`flex items-start space-x-3 p-3 rounded-md border ${
-                task.completed ? "bg-muted/50" : "bg-card"
-              }`}
-            >
-              <Checkbox
-                id={task.id}
-                checked={task.completed}
-                onCheckedChange={() => toggleTaskCompletion(task.id)}
-                className="mt-1"
-              />
-              <div className="flex-1 space-y-1">
-                <label
-                  htmlFor={task.id}
-                  className={`font-medium block ${
-                    task.completed ? "text-muted-foreground line-through" : ""
-                  }`}
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-12 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : upcomingList.length === 0 ? (
+          <div className="text-center py-6 border border-dashed rounded-lg">
+            <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500 mb-2" />
+            <p className="text-sm font-medium text-muted-foreground">All caught up!</p>
+            <p className="text-xs text-muted-foreground">No pending tasks found.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {upcomingList.map((task) => {
+              const eventTitle = events.find((e) => e.id === task.eventId)?.title || "General Event";
+              return (
+                <div
+                  key={task.id}
+                  className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
                 >
-                  {task.title}
-                </label>
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    <CalendarDays className="h-3 w-3" />
-                    {formatDate(task.dueDate)}
-                  </Badge>
-                  <Badge variant="outline" className="text-muted-foreground">
-                    {task.event}
-                  </Badge>
-                  <Badge variant="outline" className={`flex items-center gap-1 ${getPriorityColor(task.priority)}`}>
-                    {getPriorityIcon(task.priority)}
-                    {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                  </Badge>
+                  <Checkbox
+                    checked={task.status === "completed"}
+                    onCheckedChange={() => handleToggleTask(task)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p
+                        className={`text-sm font-medium leading-none ${
+                          task.status === "completed" ? "line-through text-muted-foreground" : ""
+                        }`}
+                      >
+                        {task.title}
+                      </p>
+                      {getPriorityBadge(task.priority)}
+                    </div>
+                    <div className="flex items-center text-xs text-muted-foreground space-x-3">
+                      <span className="flex items-center">
+                        <CalendarDays className="mr-1 h-3 w-3" />
+                        {eventTitle}
+                      </span>
+                      {task.dueDate && (
+                        <span className="flex items-center text-amber-600 font-medium">
+                          <Clock className="mr-1 h-3 w-3" />
+                          Due {task.dueDate}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <Button variant="ghost" size="sm" className="mt-4 w-full">
-          View All Tasks
-        </Button>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

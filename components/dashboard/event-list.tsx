@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Calendar, CalendarClock, Users, MoreHorizontal } from "lucide-react";
+import { Calendar, CalendarClock, Users, MoreHorizontal, Trash2, Eye, MapPin } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,215 +15,231 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-
-// Mock data
-const upcomingEvents = [
-  {
-    id: "1",
-    title: "Johnson Wedding",
-    date: "2025-07-15",
-    location: "Grand Hotel, New York",
-    status: "active",
-    guests: 175,
-    progress: 65,
-  },
-  {
-    id: "2",
-    title: "TechCorp Annual Conference",
-    date: "2025-05-10",
-    location: "Convention Center, San Francisco",
-    status: "active",
-    guests: 450,
-    progress: 40,
-  },
-  {
-    id: "3",
-    title: "Smith 50th Birthday",
-    date: "2025-04-22",
-    location: "Riverside Gardens, Chicago",
-    status: "active",
-    guests: 85,
-    progress: 80,
-  },
-];
-
-const pastEvents = [
-  {
-    id: "4",
-    title: "Garcia Wedding",
-    date: "2025-02-28",
-    location: "Beachside Resort, Miami",
-    status: "completed",
-    guests: 120,
-    progress: 100,
-  },
-  {
-    id: "5",
-    title: "Wilson Charity Gala",
-    date: "2025-01-15",
-    location: "Art Museum, Boston",
-    status: "completed",
-    guests: 200,
-    progress: 100,
-  },
-];
+import { CreateEventDialog } from "./create-event-dialog";
+import { EventItem } from "@/lib/db/store";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function EventList() {
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("upcoming");
+  const { toast } = useToast();
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    });
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/events");
+      const result = await res.json();
+      if (result.success) {
+        setEvents(result.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch events:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  const handleDelete = async (id: string, title: string) => {
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+    try {
+      const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
+      const result = await res.json();
+      if (result.success) {
+        toast({
+          title: "Event Deleted",
+          description: `"${title}" has been deleted.`,
+        });
+        fetchEvents();
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to delete event.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "TBD";
+    const date = new Date(dateString);
+    return isNaN(date.getTime())
+      ? dateString
+      : date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+  };
+
+  const upcomingEvents = events.filter((e) => e.status !== "completed" && e.status !== "cancelled");
+  const pastEvents = events.filter((e) => e.status === "completed" || e.status === "cancelled");
+
   return (
-    <Card>
+    <Card className="shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-6">
         <div className="space-y-1">
-          <CardTitle>Events</CardTitle>
-          <CardDescription>Manage your upcoming and past events.</CardDescription>
+          <CardTitle className="text-xl">Events</CardTitle>
+          <CardDescription>Manage your active and completed event portfolios.</CardDescription>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          New Event
-        </Button>
+        <CreateEventDialog onSuccess={fetchEvents} />
       </CardHeader>
-      <CardContent className="pt-4">
+      <CardContent className="pt-2">
         <Tabs defaultValue="upcoming" onValueChange={setActiveTab}>
           <TabsList className="mb-6">
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="past">Past</TabsTrigger>
+            <TabsTrigger value="upcoming">Upcoming ({upcomingEvents.length})</TabsTrigger>
+            <TabsTrigger value="past">Past & Completed ({pastEvents.length})</TabsTrigger>
           </TabsList>
-          <TabsContent value="upcoming">
-            <div className="space-y-6">
-              {upcomingEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="flex flex-col md:flex-row items-start md:items-center justify-between p-6 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
-                >
-                  <div className="flex items-start space-x-6 mb-4 md:mb-0">
-                    <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Calendar className="h-7 w-7 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-lg mb-1">{event.title}</h3>
-                      <div className="flex flex-col sm:flex-row sm:items-center text-sm text-muted-foreground gap-2 sm:gap-4">
-                        <div className="flex items-center">
-                          <CalendarClock className="mr-1.5 h-4 w-4" />
-                          {formatDate(event.date)}
-                        </div>
-                        <div className="flex items-center">
-                          <Users className="mr-1.5 h-4 w-4" />
-                          {event.guests} guests
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4 w-full md:w-auto">
-                    <div className="flex-1 md:flex-initial">
-                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 px-3 py-1">
-                        {event.progress}% Complete
-                      </Badge>
-                    </div>
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href={`/dashboard/events/${event.id}`}>
-                        View
-                      </Link>
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9">
-                          <MoreHorizontal className="h-5 w-5" />
-                          <span className="sr-only">More</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem>Edit event</DropdownMenuItem>
-                        <DropdownMenuItem>View timeline</DropdownMenuItem>
-                        <DropdownMenuItem>Manage guests</DropdownMenuItem>
-                        <DropdownMenuItem>Export details</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">Cancel event</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
+
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-xl" />
               ))}
             </div>
-          </TabsContent>
-          <TabsContent value="past">
-            <div className="space-y-6">
-              {pastEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="flex flex-col md:flex-row items-start md:items-center justify-between p-6 rounded-lg border bg-card hover:bg-accent/5 transition-colors"
-                >
-                  <div className="flex items-start space-x-6 mb-4 md:mb-0">
-                    <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                      <Calendar className="h-7 w-7 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-lg mb-1">{event.title}</h3>
-                      <div className="flex flex-col sm:flex-row sm:items-center text-sm text-muted-foreground gap-2 sm:gap-4">
-                        <div className="flex items-center">
-                          <CalendarClock className="mr-1.5 h-4 w-4" />
-                          {formatDate(event.date)}
+          ) : (
+            <>
+              <TabsContent value="upcoming">
+                {upcomingEvents.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed rounded-lg">
+                    <Calendar className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
+                    <p className="font-medium text-muted-foreground">No upcoming events found.</p>
+                    <p className="text-xs text-muted-foreground mt-1 mb-4">Click below to start planning a new event.</p>
+                    <CreateEventDialog onSuccess={fetchEvents} />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {upcomingEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="flex flex-col md:flex-row items-start md:items-center justify-between p-5 rounded-xl border bg-card hover:bg-accent/5 transition-all shadow-sm"
+                      >
+                        <div className="flex items-start space-x-4 mb-4 md:mb-0">
+                          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 text-primary">
+                            <Calendar className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-base">{event.title}</h3>
+                              <Badge variant="outline" className="text-xs capitalize bg-primary/5">
+                                {event.type}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-x-4 gap-y-1 mt-1.5">
+                              <div className="flex items-center">
+                                <CalendarClock className="mr-1 h-3.5 w-3.5" />
+                                {formatDate(event.date)}
+                              </div>
+                              <div className="flex items-center">
+                                <MapPin className="mr-1 h-3.5 w-3.5" />
+                                {event.location}
+                              </div>
+                              <div className="flex items-center">
+                                <Users className="mr-1 h-3.5 w-3.5" />
+                                {event.guestCapacity || 0} guests max
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center">
-                          <Users className="mr-1.5 h-4 w-4" />
-                          {event.guests} guests
+
+                        <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
+                          <Badge variant="secondary" className="px-3 py-1 font-medium text-xs">
+                            Active Planning
+                          </Badge>
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/dashboard/events/${event.id}`}>
+                              <Eye className="h-4 w-4 mr-1.5" />
+                              View
+                            </Link>
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuLabel>Event Options</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem asChild>
+                                <Link href={`/dashboard/events/${event.id}`}>View Details</Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/dashboard/guests?eventId=${event.id}`}>Manage Guests</Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/dashboard/tasks?eventId=${event.id}`}>View Tasks</Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(event.id, event.title)}
+                                className="text-destructive font-medium"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete Event
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                  <div className="flex items-center space-x-4 w-full md:w-auto">
-                    <div className="flex-1 md:flex-initial">
-                      <Badge variant="outline" className="bg-muted text-muted-foreground border-muted/20 px-3 py-1">
-                        Completed
-                      </Badge>
-                    </div>
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href={`/dashboard/events/${event.id}`}>
-                        View
-                      </Link>
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9">
-                          <MoreHorizontal className="h-5 w-5" />
-                          <span className="sr-only">More</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem>View details</DropdownMenuItem>
-                        <DropdownMenuItem>Export summary</DropdownMenuItem>
-                        <DropdownMenuItem>View financials</DropdownMenuItem>
-                        <DropdownMenuItem>Duplicate event</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                )}
+              </TabsContent>
+
+              <TabsContent value="past">
+                {pastEvents.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed rounded-lg">
+                    <p className="text-sm text-muted-foreground">No past or completed events.</p>
                   </div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
+                ) : (
+                  <div className="space-y-4">
+                    {pastEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="flex flex-col md:flex-row items-start md:items-center justify-between p-5 rounded-xl border bg-card hover:bg-accent/5 transition-all opacity-85"
+                      >
+                        <div className="flex items-start space-x-4 mb-4 md:mb-0">
+                          <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                            <Calendar className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-base">{event.title}</h3>
+                            <div className="flex items-center text-xs text-muted-foreground gap-4 mt-1">
+                              <span className="flex items-center">
+                                <CalendarClock className="mr-1 h-3.5 w-3.5" />
+                                {formatDate(event.date)}
+                              </span>
+                              <span className="flex items-center">
+                                <MapPin className="mr-1 h-3.5 w-3.5" />
+                                {event.location}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center space-x-3 w-full md:w-auto justify-end">
+                          <Badge variant="outline" className="bg-muted text-muted-foreground">
+                            Completed
+                          </Badge>
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/dashboard/events/${event.id}`}>View Archive</Link>
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </CardContent>
-      <CardFooter className="flex justify-between pt-6">
-        <Button variant="outline" size="sm" disabled={activeTab === "upcoming"}>
-          Previous
-        </Button>
-        <Button variant="outline" size="sm" disabled={activeTab === "past"}>
-          Next
-        </Button>
-      </CardFooter>
     </Card>
   );
 }
